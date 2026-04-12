@@ -44,6 +44,7 @@ Post-derivation, I performed a statistical profile of the ground-truth label set
 | **User Confirmation** | ![Tag Confirmation](./visuals/tag_confirmation.png) |
 | **Pipeline Logic** | ![Label Comparison](./visuals/label_comparison.png) |
 | **Class Frequency** | ![Event Frequency](./visuals/frequency.png) |
+| **Temporal Duration** | ![Average Duration](./visuals/duration.png) |
 | **Co-occurrence** | ![Co-occurrence Heatmap](./visuals/cooccurrence.png) |
 
 ---
