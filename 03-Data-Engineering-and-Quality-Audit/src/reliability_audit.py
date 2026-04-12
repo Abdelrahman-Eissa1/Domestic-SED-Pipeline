@@ -1,3 +1,8 @@
+"""
+Module: reliability_audit.py
+Description: Performs a comprehensive quality audit of human annotations 
+             using Jaccard Similarity (IoU) and Metadata Tag Confirmation.
+"""
 import os
 import numpy as np
 import matplotlib.pyplot as plt
