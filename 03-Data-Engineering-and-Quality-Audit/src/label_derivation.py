@@ -1,3 +1,9 @@
+"""
+Module: label_derivation_pipeline.py
+Description: A case study visualization of the label binarization process. 
+             Compares aggregated mean annotator consensus against final 
+             binary ground-truth targets using a majority-rule threshold.
+"""
 import os
 import numpy as np
 import matplotlib.pyplot as plt
