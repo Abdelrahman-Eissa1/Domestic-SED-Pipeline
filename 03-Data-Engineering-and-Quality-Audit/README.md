@@ -39,7 +39,7 @@ Post-derivation, I performed a statistical profile of the ground-truth label set
 
 | Metric | Visualization |
 | :--- | :--- |
-| **IAR Distribution** | ![Agreement Histogram](./visuals/Agreement per Sound Class.png) |
+| **IAR Distribution** | ![Agreement Histogram](./visuals/agreement_per_sound Class.png) |
 | **Class Reliability** | ![Class Agreement](./visuals/2a_2_class_agreement.png) |
 | **User Confirmation** | ![Tag Confirmation](./visuals/2a_3_tag_confirmation.png) |
 | **Pipeline Logic** | ![Label Comparison](./visuals/2b_label_comparison.png) |
