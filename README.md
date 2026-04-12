@@ -30,7 +30,7 @@ Established a temporal labeling pipeline using **Label Studio**.
 *   **Process:** Human annotators marked onsets and offsets for all target classes.
 *   **Verification:** Implemented a verification stage to correct temporal boundary errors and ensure adherence to the "one-second pause" rule.
 
-### Phase 3: Data Quality Audit & Feature Engineering (Current)
+### Phase 3: Data Quality Audit & Feature Engineering (Completed)
 Developed a preprocessing and validation pipeline to ensure the dataset is model-ready.
 *   **Reliability Metrics:** Quantified annotator consensus using **Jaccard Similarity (IoU)**, achieving a mean agreement of **71.0%**.
 *   **Label Engineering:** Developed a **Mean-Thresholding engine** to derive binary ground-truth targets from multi-annotator overlap data.
@@ -39,7 +39,7 @@ Developed a preprocessing and validation pipeline to ensure the dataset is model
     *   Performed feature correlation audits between Mel-Spectrograms and MFCCs (r=0.80).
     *   Utilized **t-SNE** manifold learning to visualize clusterability in 250+ feature dimensions.
 
-### Phase 4: Multi-label Classification (Roadmap)
+### Phase 4: Multi-label Classification (Current)
 Implementation of deep learning architectures to detect overlapping sounds.
 *   **Architecture:** Investigating Convolutional Recurrent Neural Networks (CRNNs).
 *   **Optimization:** Utilizing F1-Macro scores to address class imbalance identified in Phase 3.
