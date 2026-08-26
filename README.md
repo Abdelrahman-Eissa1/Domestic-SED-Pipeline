@@ -34,18 +34,17 @@ Established a temporal labeling pipeline using **Label Studio**.
 Developed a preprocessing and validation pipeline to ensure the dataset is model-ready.
 *   **Reliability Metrics:** Quantified annotator consensus using **Jaccard Similarity (IoU)**, achieving a mean agreement of **71.0%**.
 *   **Label Engineering:** Developed a **Mean-Thresholding engine** to derive binary ground-truth targets from multi-annotator overlap data.
-*   **Exploratory Data Analysis (EDA):** 
-    *   Analyzed class imbalance (identifying `footsteps` as the dominant class).
-    *   Performed feature correlation audits between Mel-Spectrograms and MFCCs (r=0.80).
-    *   Utilized **t-SNE** manifold learning to visualize clusterability in 250+ feature dimensions.
+*   **Exploratory Data Analysis (EDA):** Analyzed class imbalance, feature correlation ($r=0.80$), and clusterability via **t-SNE**.
 
-### Phase 4: Multi-label Classification (Current)
-Implementation of deep learning architectures to detect overlapping sounds.
-*   **Architecture:** Investigating Convolutional Recurrent Neural Networks (CRNNs).
-*   **Optimization:** Utilizing F1-Macro scores to address class imbalance identified in Phase 3.
+### Phase 4: Multi-label Classification (Completed)
+Implemented and optimized machine learning architectures to detect overlapping sounds.
+*   **Leakage Prevention:** Applied a **Collector-Level Split** to ensure models generalize to new users/environments.
+*   **Model Comparison:** Evaluated **Random Forest (RF)** vs. **Multi-Layer Perceptron (MLP)** using a `MultiOutputClassifier` wrapper.
+*   **Optimization:** Conducted hyperparameter sweeps on tree depth and network architecture, using **Macro F1-Score** to handle the heavy long-tail class imbalance.
+*   **Benchmark:** Achieved a peak Macro F1 of **0.3620** (RF), significantly outperforming the Random Sampling Baseline (0.0544).
 
-### Phase 5: Production Deployment & Challenge (Roadmap)
-Evaluating system performance on a non-public "secret" validation set to simulate real-world customer deployment.
+### Phase 5: Production Deployment & Challenge (Current/Roadmap)
+Evaluation of system performance on a non-public "secret" validation set to simulate real-world customer deployment and "Black-Box" testing.
 
 ---
 
