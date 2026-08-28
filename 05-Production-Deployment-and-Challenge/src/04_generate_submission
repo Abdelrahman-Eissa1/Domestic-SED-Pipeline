@@ -1,0 +1,69 @@
+import os
+import glob
+import numpy as np
+import pandas as pd
+from scipy.signal import medfilt
+import joblib
+
+# --- CONSTANTS & HELPERS ---
+CLASS_NAMES = ['bell_ringing', 'coffee_machine', 'cutlery_dishes', 'door_open_close', 'footsteps', 
+               'keyboard_typing', 'keychain', 'light_switch', 'microwave', 'phone_ringing', 
+               'running_water', 'toilet_flushing', 'vacuum_cleaner', 'wardrobe_drawer_open_close', 'window_open_close']
+
+FEATURE_NAMES = [
+    "zcr_mean", "zcr_std", "zcr_min", "zcr_max", "melspect_mean", "melspect_std", 
+    "melspect_min", "melspect_max", "mfcc_mean", "mfcc_std", "mfcc_min", "mfcc_max",
+    "mfcc_d_mean", "mfcc_d_std", "mfcc_d_min", "mfcc_d_max", "mfcc_d2_mean", 
+    "mfcc_d2_std", "mfcc_d2_min", "mfcc_d2_max", "flux_mean", "flux_std", 
+    "flux_min", "flux_max", "flatness_mean", "flatness_std", "flatness_min", 
+    "flatness_max", "centroid_mean", "centroid_std", "centroid_min", "centroid_max",
+    "bandwidth_mean", "bandwidth_std", "bandwidth_min", "bandwidth_max",
+    "contrast_mean", "contrast_std", "contrast_min", "contrast_max",
+    "rolloff_low_mean", "rolloff_low_std", "rolloff_low_min", "rolloff_low_max",
+    "rolloff_high_mean", "rolloff_high_std", "rolloff_high_min", "rolloff_high_max",
+    "energy_mean", "energy_std", "energy_min", "energy_max", "power_mean", "power_std", "power_min", "power_max",
+]
+
+def build_feature_matrix(data: dict) -> np.ndarray:
+    arrays = []
+    for feat_name in FEATURE_NAMES:
+        feat = data[feat_name]
+        if feat.ndim == 1: feat = feat[:, np.newaxis]
+        arrays.append(feat.astype(np.float32))
+    return np.concatenate(arrays, axis=1)
+
+# --- EXECUTION ---
+print("Step 4: Generating Final Submission for Hidden Test Set...")
+clf = joblib.load("src/best_rf_model.pkl")
+PATH_TEST = "MLPC2026_challenge/test/audio_features/"
+test_files = sorted(glob.glob(os.path.join(PATH_TEST, "*.npz")))
+
+submission_rows = []
+for f in test_files:
+    data = dict(np.load(f, allow_pickle=True))
+    X_test = build_feature_matrix(data) 
+    raw_preds = clf.predict(X_test)
+    
+    # Apply Median Filter
+    smoothed_preds = np.zeros_like(raw_preds)
+    for c in range(raw_preds.shape[1]):
+        smoothed_preds[:, c] = medfilt(raw_preds[:, c], kernel_size=3)
+        
+    filename = os.path.basename(f).replace(".npz", ".wav")
+    for c_idx, c_name in enumerate(CLASS_NAMES):
+        cls_preds = smoothed_preds[:, c_idx]
+        in_event, onset = False, 0
+        for t_idx, val in enumerate(cls_preds):
+            time = data["start_time"][t_idx]
+            if val == 1 and not in_event:
+                onset = time
+                in_event = True
+            elif val == 0 and in_event:
+                submission_rows.append([filename, c_name, onset, time])
+                in_event = False
+        if in_event:
+            submission_rows.append([filename, c_name, onset, data["start_time"][-1] + 1.0])
+
+df_sub = pd.DataFrame(submission_rows, columns=["filename", "annotation", "onset", "offset"])
+df_sub.to_csv("predictions.csv", index=False)
+print(f"Success! predictions.csv generated with {len(df_sub)} events.")
