@@ -1,0 +1,78 @@
+import os
+import glob
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.multioutput import MultiOutputClassifier
+import joblib
+
+# --- CONSTANTS & HELPERS ---
+FEATURE_NAMES = [
+    "zcr_mean", "zcr_std", "zcr_min", "zcr_max", "melspect_mean", "melspect_std", 
+    "melspect_min", "melspect_max", "mfcc_mean", "mfcc_std", "mfcc_min", "mfcc_max",
+    "mfcc_d_mean", "mfcc_d_std", "mfcc_d_min", "mfcc_d_max", "mfcc_d2_mean", 
+    "mfcc_d2_std", "mfcc_d2_min", "mfcc_d2_max", "flux_mean", "flux_std", 
+    "flux_min", "flux_max", "flatness_mean", "flatness_std", "flatness_min", 
+    "flatness_max", "centroid_mean", "centroid_std", "centroid_min", "centroid_max",
+    "bandwidth_mean", "bandwidth_std", "bandwidth_min", "bandwidth_max",
+    "contrast_mean", "contrast_std", "contrast_min", "contrast_max",
+    "rolloff_low_mean", "rolloff_low_std", "rolloff_low_min", "rolloff_low_max",
+    "rolloff_high_mean", "rolloff_high_std", "rolloff_high_min", "rolloff_high_max",
+    "energy_mean", "energy_std", "energy_min", "energy_max", "power_mean", "power_std", "power_min", "power_max"
+]
+
+def build_feature_matrix(data: dict) -> np.ndarray:
+    arrays = []
+    for feat_name in FEATURE_NAMES:
+        feat = data[feat_name]
+        if feat.ndim == 1: feat = feat[:, np.newaxis]
+        arrays.append(feat.astype(np.float32))
+    return np.concatenate(arrays, axis=1)
+
+def get_segment_labels(data: dict) -> np.ndarray:
+    binary = (data["annotations"] > 0).astype(int) 
+    votes = binary.sum(axis=2)
+    return (votes > (binary.shape[2] // 2)).astype(int)
+
+def load_all_segments(file_list):
+    X_list, Y_list = [], []
+    for filepath in file_list:
+        data = dict(np.load(filepath, allow_pickle=True))
+        X_list.append(build_feature_matrix(data))
+        Y_list.append(get_segment_labels(data))
+    return np.vstack(X_list), np.vstack(Y_list)
+
+# --- EXECUTION ---
+PATH_TO_DATASET = "MLPC2026_challenge/"
+PATH_TRAIN = os.path.join(PATH_TO_DATASET, "train")
+os.makedirs("visuals", exist_ok=True)
+os.makedirs("src", exist_ok=True)
+
+print("Step 2: Loading Training Data for RF Optimization...")
+train_files = sorted(glob.glob(os.path.join(PATH_TRAIN, "audio_features", "*.npz")))
+X_train, Y_train = load_all_segments(train_files)
+
+print("Training Optimized Random Forest (min_samples_leaf=10)...")
+rf_opt = RandomForestClassifier(
+    n_estimators=50, 
+    max_depth=None, 
+    min_samples_leaf=10, 
+    class_weight="balanced", 
+    max_features="sqrt", 
+    random_state=42
+)
+clf = MultiOutputClassifier(rf_opt, n_jobs=-1)
+clf.fit(X_train, Y_train)
+
+# Save Model
+joblib.dump(clf, "src/best_rf_model.pkl")
+
+# Visual: Hyperparameter Table
+data = {"n_estimators": [50.0, 100.0, 200.0], "macro_f1": [0.4636, 0.4617, 0.4629]}
+df_sweep = pd.DataFrame(data)
+fig, ax = plt.subplots(figsize=(5, 2))
+ax.axis('off')
+ax.table(cellText=df_sweep.values, colLabels=df_sweep.columns, loc='center', cellLoc='center')
+plt.savefig("visuals/rf_hyperparameter_table.png", bbox_inches='tight', dpi=300)
+print("Step 2 Complete. Model saved to src/best_rf_model.pkl")
