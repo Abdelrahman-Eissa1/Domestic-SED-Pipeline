@@ -1,0 +1,44 @@
+import numpy as np
+import os
+
+CLASS_NAMES = [
+    "bell_ringing", "coffee_machine", "cutlery_dishes", "door_open_close",
+    "footsteps", "keyboard_typing", "keychain", "light_switch",
+    "microwave", "phone_ringing", "running_water", "toilet_flushing",
+    "vacuum_cleaner", "wardrobe_drawer_open_close", "window_open_close"
+]
+
+FEATURE_NAMES = [
+    "zcr_mean", "zcr_std", "zcr_min", "zcr_max", "melspect_mean", "melspect_std", 
+    "melspect_min", "melspect_max", "mfcc_mean", "mfcc_std", "mfcc_min", "mfcc_max",
+    "mfcc_d_mean", "mfcc_d_std", "mfcc_d_min", "mfcc_d_max", "mfcc_d2_mean", 
+    "mfcc_d2_std", "mfcc_d2_min", "mfcc_d2_max", "flux_mean", "flux_std", 
+    "flux_min", "flux_max", "flatness_mean", "flatness_std", "flatness_min", 
+    "flatness_max", "centroid_mean", "centroid_std", "centroid_min", "centroid_max",
+    "bandwidth_mean", "bandwidth_std", "bandwidth_min", "bandwidth_max",
+    "contrast_mean", "contrast_std", "contrast_min", "contrast_max",
+    "rolloff_low_mean", "rolloff_low_std", "rolloff_low_min", "rolloff_low_max",
+    "rolloff_high_mean", "rolloff_high_std", "rolloff_high_min", "rolloff_high_max",
+    "energy_mean", "energy_std", "energy_min", "energy_max", "power_mean", "power_std", "power_min", "power_max"
+]
+
+def build_feature_matrix(data: dict) -> np.ndarray:
+    arrays = []
+    for feat_name in FEATURE_NAMES:
+        feat = data[feat_name]
+        if feat.ndim == 1: feat = feat[:, np.newaxis]
+        arrays.append(feat.astype(np.float32))
+    return np.concatenate(arrays, axis=1)
+
+def get_segment_labels(data: dict) -> np.ndarray:
+    binary = (data["annotations"] > 0).astype(int) 
+    votes = binary.sum(axis=2)
+    return (votes > (binary.shape[2] // 2)).astype(int)
+
+def load_all_segments(file_list):
+    X_list, Y_list = [], []
+    for filepath in file_list:
+        data = dict(np.load(filepath, allow_pickle=True))
+        X_list.append(build_feature_matrix(data))
+        Y_list.append(get_segment_labels(data))
+    return np.vstack(X_list), np.vstack(Y_list)
