@@ -1,0 +1,139 @@
+import os
+import glob
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+from sklearn.tree import DecisionTreeClassifier
+from sklearn.multioutput import MultiOutputClassifier
+from typing import List, Tuple
+
+os.makedirs("visuals", exist_ok=True)
+
+# Import official evaluation helpers
+from evaluate import (
+    aggregate_ground_truth_annotations,
+    build_segment_frame_from_intervals,
+    calculate_f1_score,
+)
+
+# --- CONFIGURATION ---
+PATH_TO_DATASET = "MLPC2026_challenge/"  # Update this path
+PATH_TRAIN = os.path.join(PATH_TO_DATASET, "train")
+PATH_VAL   = os.path.join(PATH_TO_DATASET, "validation")
+
+# Reproduce exact class list
+CLASS_NAMES = [
+    "bell_ringing", "coffee_machine", "cutlery_dishes", "door_open_close",
+    "footsteps", "keyboard_typing", "keychain", "light_switch",
+    "microwave", "phone_ringing", "running_water", "toilet_flushing",
+    "vacuum_cleaner", "wardrobe_drawer_open_close", "window_open_close"
+]
+
+FEATURE_NAMES = [
+    "zcr_mean", "zcr_std", "zcr_min", "zcr_max",
+    "melspect_mean", "melspect_std", "melspect_min", "melspect_max",
+    "mfcc_mean", "mfcc_std", "mfcc_min", "mfcc_max",
+    "mfcc_d_mean", "mfcc_d_std", "mfcc_d_min", "mfcc_d_max",
+    "mfcc_d2_mean", "mfcc_d2_std", "mfcc_d2_min", "mfcc_d2_max",
+    "flux_mean", "flux_std", "flux_min", "flux_max",
+    "flatness_mean", "flatness_std", "flatness_min", "flatness_max",
+    "centroid_mean", "centroid_std", "centroid_min", "centroid_max",
+    "bandwidth_mean", "bandwidth_std", "bandwidth_min", "bandwidth_max",
+    "contrast_mean", "contrast_std", "contrast_min", "contrast_max",
+    "rolloff_low_mean", "rolloff_low_std", "rolloff_low_min", "rolloff_low_max",
+    "rolloff_high_mean", "rolloff_high_std", "rolloff_high_min", "rolloff_high_max",
+    "energy_mean", "energy_std", "energy_min", "energy_max",
+    "power_mean", "power_std", "power_min", "power_max",
+]
+
+# --- UTILS ---
+def build_feature_matrix(data: dict) -> np.ndarray:
+    arrays = []
+    for feat_name in FEATURE_NAMES:
+        feat = data[feat_name]
+        if feat.ndim == 1:
+            feat = feat[:, np.newaxis]
+        arrays.append(feat.astype(np.float32))
+    return np.concatenate(arrays, axis=1)
+
+def get_segment_labels(data: dict) -> np.ndarray:
+    # Aggregation logic: Majority vote across annotators
+    binary = (data["annotations"] > 0).astype(int) 
+    votes = binary.sum(axis=2)
+    return (votes > (binary.shape[2] // 2)).astype(int)
+
+def load_all_segments(file_list: List[str]):
+    X_list, Y_list = [], []
+    for filepath in file_list:
+        data = dict(np.load(filepath, allow_pickle=True))
+        X_list.append(build_feature_matrix(data))
+        Y_list.append(get_segment_labels(data))
+    return np.vstack(X_list), np.vstack(Y_list)
+
+# --- EXECUTION ---
+print("Step 1: Loading Training Data...")
+train_files = sorted(glob.glob(os.path.join(PATH_TRAIN, "audio_features", "*.npz")))
+X_train, Y_train = load_all_segments(train_files)
+
+# Subsample to 50k as per report for efficiency/consistency
+rng = np.random.default_rng(seed=42)
+if X_train.shape[0] > 50000:
+    idx = rng.choice(X_train.shape[0], size=50000, replace=False)
+    X_train, Y_train = X_train[idx], Y_train[idx]
+
+print(f"Training on {X_train.shape[0]} segments...")
+
+# 1. Initialize Baseline Classifier
+base_clf = DecisionTreeClassifier(max_depth=20, max_features="sqrt", random_state=42)
+clf = MultiOutputClassifier(base_clf, n_jobs=-1)
+clf.fit(X_train, Y_train)
+
+# 2. Prepare Non-Hidden Test Split (The 2nd half of validation files)
+val_files = sorted(glob.glob(os.path.join(PATH_VAL, "audio_features", "*.npz")))
+n_half = len(val_files) // 2
+our_test_files = val_files[n_half:]
+
+# 3. Inference & Evaluation
+print("Evaluating on Non-Hidden Test Set...")
+all_preds = []
+for f in our_test_files:
+    data = dict(np.load(f, allow_pickle=True))
+    X_file = build_feature_matrix(data)
+    # Only keep whole-second predictions for the metric
+    whole_sec_mask = np.isclose(data["start_time"] % 1.0, 0.0)
+    preds = clf.predict(X_file)[whole_sec_mask]
+    
+    # Format for evaluation script logic
+    filename = os.path.basename(f).replace(".npz", ".wav")
+    for t_idx, t in enumerate(data["start_time"][whole_sec_mask]):
+        for c_idx, c_name in enumerate(CLASS_NAMES):
+            if preds[t_idx, c_idx] == 1:
+                all_preds.append({
+                    "filename": filename, "annotation": c_name,
+                    "onset": t, "offset": t + 1.0
+                })
+
+pred_df = pd.DataFrame(all_preds)
+ann_df = pd.read_csv(os.path.join(PATH_VAL, "annotations.csv"))
+test_filenames = [os.path.basename(f).replace(".npz", ".wav") for f in our_test_files]
+ann_test = ann_df[ann_df["filename"].isin(test_filenames)]
+
+# Official Metric Calculation
+gt = aggregate_ground_truth_annotations(ann_test)
+gt_segments = build_segment_frame_from_intervals(gt, name="ground_truth")
+pred_segments = build_segment_frame_from_intervals(pred_df, name="predictions")
+
+macro_f1, results = calculate_f1_score(gt_segments, pred_segments)
+print(f"\nBaseline Reproduction Macro F1: {macro_f1:.4f}")
+
+# --- VISUALIZATION ---
+plt.figure(figsize=(12, 5))
+plt.bar(results["annotation"], results["f1"], color='steelblue', alpha=0.8)
+plt.axhline(macro_f1, color='red', linestyle='--', label=f'Macro Average ({macro_f1:.3f})')
+plt.xticks(rotation=45, ha='right')
+plt.ylabel("F1 Score")
+plt.title("Per-Class F1 Score — Baseline Decision Tree")
+plt.legend()
+plt.tight_layout()
+plt.savefig("visuals/baseline_f1_scores.png")
+print("Visual saved: visuals/baseline_f1_scores.png")
