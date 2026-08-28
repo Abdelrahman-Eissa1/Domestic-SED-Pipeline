@@ -7,7 +7,54 @@ from sklearn.tree import DecisionTreeClassifier
 from sklearn.multioutput import MultiOutputClassifier
 from typing import List, Tuple
 
+os.makedirs("visuals", exist_ok=Trueimport os, glob, numpy as np, pandas as pd, matplotlib.pyplot as plt
+from sklearn.tree import DecisionTreeClassifier
+from sklearn.multioutput import MultiOutputClassifier
+from utils import CLASS_NAMES, load_all_segments, build_feature_matrix
+from evaluate import aggregate_ground_truth_annotations, build_segment_frame_from_intervals, calculate_f1_score
+
 os.makedirs("visuals", exist_ok=True)
+PATH_TRAIN = "MLPC2026_challenge/train/audio_features/"
+PATH_VAL_ANN = "MLPC2026_challenge/validation/annotations.csv"
+PATH_VAL_FEAT = "MLPC2026_challenge/validation/audio_features/"
+
+print("Step 1: Training Baseline...")
+train_files = sorted(glob.glob(os.path.join(PATH_TRAIN, "*.npz")))
+X_train, Y_train = load_all_segments(train_files[:1000]) # Subsample for speed
+
+clf = MultiOutputClassifier(DecisionTreeClassifier(max_depth=20, random_state=42), n_jobs=-1).fit(X_train, Y_train)
+
+print("Evaluating...")
+val_files = sorted(glob.glob(os.path.join(PATH_VAL_FEAT, "*.npz")))[499:]
+all_preds = []
+for f in val_files:
+    data = dict(np.load(f, allow_pickle=True))
+    whole_sec = np.isclose(data["start_time"] % 1.0, 0.0)
+    preds = clf.predict(build_feature_matrix(data))[whole_sec]
+    fname = os.path.basename(f).replace(".npz", ".wav")
+    for t_idx, t in enumerate(data["start_time"][whole_sec]):
+        for c_idx, c_name in enumerate(CLASS_NAMES):
+            if preds[t_idx, c_idx] == 1:
+                all_preds.append({"filename": fname, "annotation": c_name, "onset": t, "offset": t+1.0})
+
+# Metrics & Plotting
+ann_test = pd.read_csv(PATH_VAL_ANN)
+gt = aggregate_ground_truth_annotations(ann_test)
+gt_seg = build_segment_frame_from_intervals(gt, name="gt")
+pr_seg = build_segment_frame_from_intervals(pd.DataFrame(all_preds), name="pr")
+macro_f1, results = calculate_f1_score(gt_seg, pr_seg)
+
+# Visual 1: Bar Chart
+plt.figure(figsize=(12, 5))
+plt.bar(results["annotation"], results["f1"], color='#6c97bf')
+plt.axhline(macro_f1, color='red', linestyle='--')
+plt.xticks(rotation=45, ha='right'); plt.title(f"Baseline F1 Scores (Macro: {macro_f1:.3f})")
+plt.savefig("visuals/baseline_f1_scores.png", bbox_inches='tight')
+
+# Visual 2: Table Image
+fig, ax = plt.subplots(figsize=(10, 4)); ax.axis('off')
+table = ax.table(cellText=results.drop(columns=['map']).round(3).values, colLabels=["Class", "Prec", "Rec", "F1"], loc='center', cellLoc='center')
+plt.savefig("visuals/baseline_table.png", bbox_inches='tight', dpi=300))
 
 # Import official evaluation helpers
 from evaluate import (
