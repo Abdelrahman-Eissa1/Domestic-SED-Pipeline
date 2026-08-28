@@ -1,0 +1,26 @@
+import os, glob, numpy as np, pandas as pd, joblib
+from scipy.signal import medfilt
+from utils import build_feature_matrix, CLASS_NAMES
+
+print("Step 4: Creating predictions.csv...")
+clf = joblib.load("src/best_rf_model.pkl")
+test_files = sorted(glob.glob("MLPC2026_challenge/test/audio_features/*.npz"))
+rows = []
+
+for f in test_files:
+    data = dict(np.load(f, allow_pickle=True))
+    preds = clf.predict(build_feature_matrix(data))
+    for c in range(preds.shape[1]): preds[:, c] = medfilt(preds[:, c], kernel_size=3)
+    
+    fname = os.path.basename(f).replace(".npz", ".wav")
+    for c_idx, c_name in enumerate(CLASS_NAMES):
+        cp = preds[:, c_idx]
+        in_ev, onset = False, 0
+        for t_idx, val in enumerate(cp):
+            t = data["start_time"][t_idx]
+            if val == 1 and not in_ev: onset, in_ev = t, True
+            elif val == 0 and in_ev: rows.append([fname, c_name, onset, t]); in_ev = False
+        if in_ev: rows.append([fname, c_name, onset, data["start_time"][-1]+1.0])
+
+pd.DataFrame(rows, columns=["filename", "annotation", "onset", "offset"]).to_csv("predictions.csv", index=False)
+print("Done! predictions.csv is ready.")
