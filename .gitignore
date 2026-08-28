@@ -15,9 +15,16 @@ venv/
 .DS_Store
 Thumbs.db
 
-# --- Project Specific Safety ---
-# Even though I won't upload them, these rules prevent accidents:
-*.npz
-*.wav
+# --- Large ML Artifacts & Weights ---
+*.pkl
+*.npy
 *.csv
+# Keep the script files, but ignore the output deliverables
+!src/*.py
+
+# --- Dataset Safety ---
+# Prevents proprietary university data from being uploaded
 MLPC2026_dataset_development/
+MLPC2026_challenge/
+audio_features/
+audio/
